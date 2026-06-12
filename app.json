@@ -20,10 +20,23 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      },
+    "package": "com.gelsynestrada.miapp"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "a46cba5f-e096-44cc-9574-8765f96b6cb4"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/a46cba5f-e096-44cc-9574-8765f96b6cb4"
+    },
+    "owner": "gelsynest"
   }
 }
