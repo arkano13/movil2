@@ -3,6 +3,7 @@ import { SafeAreaView } from "react-native-web";
 import LoginSimple from "./src/pantallas/Login";
 import Principal from "./src/pantallas/Principal";
 import Usuarios from "./src/pantallas/Crear_usuario";
+import Examen from "./src/pantallas/Examen"
 
 
 
