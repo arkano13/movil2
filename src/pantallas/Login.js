@@ -1,385 +1,234 @@
-import { StatusBar } from 'expo-status-bar';
+// src/Login.js - Formulario de autenticación de usuario
 import React, { useState, useEffect } from 'react';
-import { useNavigation } from '@react-navigation/native';
 import {
-  StyleSheet,
-  Text,
-  TouchableOpacity,
   View,
-  TextInput,
+  Text,
+  StyleSheet,
+  Image,
+  TouchableOpacity,
+  Alert,
 } from 'react-native';
-
+import CustomInput from '../componentes/CustomInput';
+import CustomButton from '../componentes/CustomButton';
 import CustomAlert from '../componentes/CustomAlert';
 import { API_URLS } from '../config/config';
-import BitacoraService from '../componentes/Bitacora';
+import BitacoraServices from '../componentes/Bitacora';
+import  AsyncStorage from '@react-native-async-storage/async-storage';
 
-export default function App() {
-
-  const [user, setUser] = useState("");
-  const [pass, setPass] = useState("");
-  const navigation = useNavigation();
-
-  const [alert, setAlert] = useState({
-    visible: false,
-    title: "",
-    message: "",
-    _callback: null
+export default function Login({ navigation }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [alertData, setAlertData] = useState({
+    visible:false,
+    title:"",
+    message:"",
+    _callback:null
   });
 
   const [conexionBD, setConexionBD] = useState({
-    estado: "verificando",
-    mensaje: "Verificando conexión...",
-    datos: null
+    estado:"verificando",
+    mensaje:"verificando conexion...",
+    datos:null
   });
 
-  const showCustomAlert = (title, message, callback = null) => {
-    setAlert({
-      visible: true,
-      title,
-      message,
-      _callback: callback
-    });
-  };
-
-  // =========================
-  // CHECK BD
-  // =========================
-  const verificarConexion = async () => {
-    try {
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
-
-      const respuesta = await fetch(API_URLS.CHECKBD, {
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-
-      const data = await respuesta.json();
-
-      if (data.conectado) {
-        setConexionBD({
-          estado: "conectado",
-          mensaje: "Conexión establecida",
-          datos: data
-        });
-
-        showCustomAlert(
-          "Conexión Exitosa",
-          "La conexión con la Base de Datos fue establecida correctamente."
-        );
-
-        await BitacoraService.registrarDispositivo();
-
-      } else {
-        setConexionBD({
-          estado: "desconectado",
-          mensaje: "No existe conexión con la Base de Datos",
-          datos: null
-        });
-      }
-
-    } catch (error) {
-      const mensaje = error.name === 'AbortError'
-        ? "Tiempo de espera agotado"
-        : "No existe conexión con la Base de Datos";
-
-      setConexionBD({
-        estado: "desconectado",
-        mensaje,
-        datos: null
-      });
+  const showCustomAlert=(title, message, callback)=>{
+      setAlertData({visible:true,title, message, _callback:callback});
     }
-  };
 
-  useEffect(() => {
-    verificarConexion();
-  }, []);
-
-  // =========================
-  // LOGIN
-  // =========================
-  const manejaLogin = async () => {
-
-    if (!user.trim() || !pass.trim()) {
-      showCustomAlert("Campos Vacíos", "Escriba Usuario y Clave");
+  const handleLogin = async () => {
+    if (!username || !password) {
+      showCustomAlert('Campos vacios','Por favor ingrese usuario y contraseña.');
       return;
     }
-
-    try {
-
-      // ✅ Body como string puro + Content-Length para garantizar compatibilidad en APK
-      const bodyString = JSON.stringify({
-        usuario_nombre: user.trim(),
-        usuario_clave: pass
-      });
-
-      const respuesta = await fetch(API_URLS.LOGIN, {
+    //navigation.navigate('Bienvenido', { user: username });
+    try{
+      const respuesta = await fetch(API_URLS.LOGIN,{
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Content-Length': String(bodyString.length)
-        },
-        body: bodyString
+        headers: {'Content-Type':'application/json','Accept':'application/json'},
+       body: JSON.stringify({usuario_nombre: username, usuario_clave: password}),
       });
+      const textoRespuesta = await respuesta.text();
+      console.log("Respuesta del servidor",textoRespuesta);
 
-      const textoRaw = await respuesta.text();
-
-      let data;
-      try {
-        data = JSON.parse(textoRaw);
-      } catch (e) {
-        showCustomAlert("Error", `Respuesta inválida: ${textoRaw}`);
-        return;
-      }
-
-      if (!respuesta.ok && respuesta.status !== 401) {
-        showCustomAlert("Error", data.mensaje || "Error de autenticación");
-        return;
-      }
+      const data = JSON.parse(textoRespuesta);
 
       if (data.exito) {
 
-        await BitacoraService.registrarEvento({
-          accion: "Login",
-          estado_operacion: "EXITOSO",
-          mensaje_error: null
-        });
-
-        showCustomAlert(
-          "Bienvenido",
-          data.mensaje,
-          () => navigation.navigate("Principal")
-        );
-
+        await AsyncStorage.setItem('user_id', String(data.usuario.id));
+        console.log("usuarioId",data.usuario.id);
+        const resultDispo = await BitacoraServices.registrarDispositivo();
+        //Llamar a Guardar Evento en Bitacora
+        await BitacoraServices.registrarEvento({
+                  accion: "LOGIN",
+                  usuario_id: data.usuario.id,
+                  estado_operacion: "EXITOSO",
+                  mensaje_error: null
+                });
+        navigation.navigate('Home2', { user: data.usuario });
       } else {
-        showCustomAlert(
-          "Acceso denegado",
-          data.mensaje || "Usuario o contraseña incorrectos"
-        );
+        showCustomAlert('Error', data.mensaje);
       }
-
-    } catch (error) {
-      showCustomAlert(
-        "Error de conexión",
-        `Detalle: ${error.message}`
-      );
+    }catch(error){
+      console.error("Error",error);
     }
   };
+
+  //metodo para verificar conexion a base de datos
+  const verificarConexionBD = async() => {
+    setConexionBD ({estado:"verificando",mensaje:"Verificando conexion...",datos:null});
+
+    try {
+      const respuesta = await fetch (API_URLS.CHECKBD,{
+        method:'GET',
+        headers:{'Accept':'application/json'},
+      });
+
+      const textoRespuesta = await respuesta.text();
+      console.log(textoRespuesta);
+      if(!respuesta.ok){
+        throw new Error(`Erro http: ${respuesta.status}`);
+      }
+      const data = JSON.parse(textoRespuesta);
+      if(data.conectado){
+        setConexionBD ({estado:"Conectado",mensaje:"Conexion establecida.",datos:data});
+        showCustomAlert('Exito','Conexion satisfactoria.');
+        
+      }
+    } catch (error) {
+      console.error("Error de conexion",error.message);
+      setConexionBD({estado:"error", mensaje:"Sin conexión al servidor.", datos:null});
+    }
+  }
+  //---------------------------------------------------
+
+  useEffect(()=>{verificarConexionBD();},[]);
 
   return (
     <View style={styles.container}>
 
-      <View style={styles.logoContainer}>
-        <Text style={styles.logo}>👤</Text>
-      </View>
-
-      <TextInput
-        style={styles.input}
-        placeholder="Usuario"
-        value={user}
-        onChangeText={setUser}
-        autoCapitalize="none"
+      {/* Avatar */}
+      <Image
+        source={require('../assets/usuario.png')}
+        style={styles.avatar}
       />
 
-      <TextInput
-        style={styles.input}
-        placeholder="Contraseña"
-        value={pass}
-        secureTextEntry
-        onChangeText={setPass}
+      {/* Campos reutilizables */}
+      <CustomInput
+        placeholder="Username"
+        value={username}
+        onChangeText={setUsername}
+      />
+      <CustomInput
+        placeholder="Password"
+        value={password}
+        onChangeText={setPassword}
+        secureTextEntry={true}
       />
 
-      {/* MENSAJE CONEXIÓN */}
-      {conexionBD.estado !== "conectado" && (
-        <Text style={styles.errorConexion}>
-          {conexionBD.mensaje}
-        </Text>
+      {/* Botón principal */}
+      {/* Mensaje de estado de conexión */}
+      {conexionBD.estado === "verificando" && (
+        <Text style={styles.statusText}>Verificando conexión...</Text>
       )}
 
-      {/* BOTÓN SOLO SI HAY CONEXIÓN */}
-      {conexionBD.estado === "conectado" && (
-        <TouchableOpacity
-          style={styles.btn}
-          onPress={manejaLogin}
-        >
-          <Text style={styles.btnText}>Entrar</Text>
-        </TouchableOpacity>
+      {conexionBD.estado === "error" && (
+        <Text style={styles.errorText}>{conexionBD.mensaje}</Text>
       )}
 
-      <TouchableOpacity
-        onPress={() =>
-          showCustomAlert("Recuperar contraseña", "Función en desarrollo")
-        }
-      >
-        <Text style={styles.forgot}>
-          ¿Olvidaste tu contraseña?
+      {/* Botón principal - solo visible si hay conexión */}
+      {conexionBD.estado === "Conectado" && (
+        <CustomButton title="Entrar" onPress={handleLogin} />
+      )}
+
+      {/* Botón principal */}
+
+      {/* Olvidé contraseña */}
+      <TouchableOpacity style={styles.forgotBtn}>
+        <Text style={styles.forgotText}>Forgot Password</Text>
+      </TouchableOpacity>
+
+      {/* Botones sociales */}
+      <CustomButton
+        title="Sign in with Facebook"
+        backgroundColor="#eef0fb"
+        textColor="#3b5bdb"
+        onPress={() => Alert.alert('Facebook', 'Próximamente')}
+      />
+      <CustomButton
+        title="Sign in with Google"
+        backgroundColor="#fdf0f0"
+        textColor="#e03131"
+        onPress={() => Alert.alert('Google', 'Próximamente')}
+      />
+      <CustomButton
+        title="Sign in with Apple"
+        backgroundColor="#f0f0f0"
+        textColor="#222"
+        onPress={() => Alert.alert('Apple', 'Próximamente')}
+      />
+
+      {/* Enlace a registro */}
+      <TouchableOpacity onPress={() => navigation.navigate('CreacionUsuario')}>
+        <Text style={styles.registerLink}>
+          No tienes cuenta, <Text style={styles.registerLinkBold}>Crear uno?</Text>
         </Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.facebookBtn}>
-        <Text style={styles.facebookText}>
-          Iniciar sesión con Facebook
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.googleBtn}>
-        <Text style={styles.googleText}>
-          Iniciar sesión con Google
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.appleBtn}>
-        <Text style={styles.appleText}>
-          Iniciar sesión con Apple
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        onPress={() => navigation.navigate("Usuarios")}
-      >
-        <Text style={styles.register}>
-          No tienes cuenta, ¿Crear una?
-        </Text>
-      </TouchableOpacity>
-
+      {/* ✅ CustomAlert con alertData */}
       <CustomAlert
-        visible={alert.visible}
-        title={alert.title}
-        message={alert.message}
+        visible={alertData.visible}
+        title={alertData.title}
+        message={alertData.message}
         onConfirm={() => {
-          const callback = alert._callback;
-          setAlert({ ...alert, visible: false });
-          if (callback) callback();
+          setAlertData({ ...alertData, visible: false });
+          if (alertData._callback) alertData._callback();
         }}
       />
-
-      <StatusBar style="auto" />
 
     </View>
   );
 }
 
-// =========================
-// ESTILOS (NO TOCADOS)
-// =========================
 const styles = StyleSheet.create({
-
-
-container: {
-  flex: 1,
-  backgroundColor: "#edf2f7",
-  justifyContent: "center",
-  paddingHorizontal: 25,
-},
-
-logoContainer: {
-  alignItems: "center",
-  justifyContent: "center",
-  marginBottom: 40,
-},
-
-logo: {
-  fontSize: 90,
-},
-
-input: {
-  width: "100%",
-  borderWidth: 1,
-  borderColor: "#dbe2ea",
-  backgroundColor: "#ffffff",
-  padding: 15,
-  marginBottom: 15,
-  borderRadius: 14,
-  fontSize: 16,
-  elevation: 2,
-},
-
-errorConexion: {
-  color: "#dc2626",
-  textAlign: "center",
-  marginBottom: 15,
-  fontWeight: "bold",
-},
-
-btn: {
-  width: "100%",
-  backgroundColor: "#2563eb",
-  padding: 16,
-  borderRadius: 14,
-  alignItems: "center",
-  marginTop: 5,
-  elevation: 3,
-},
-
-btnText: {
-  color: "#fff",
-  fontWeight: "bold",
-  fontSize: 17,
-},
-
-forgot: {
-  textAlign: "center",
-  color: "#2563eb",
-  fontWeight: "600",
-  marginTop: 18,
-  marginBottom: 22,
-},
-
-facebookBtn: {
-  width: "100%",
-  backgroundColor: "#1877F2",
-  padding: 15,
-  borderRadius: 14,
-  alignItems: "center",
-  marginBottom: 12,
-  elevation: 2,
-},
-
-facebookText: {
-  color: "#fff",
-  fontWeight: "bold",
-},
-
-googleBtn: {
-  width: "100%",
-  backgroundColor: "#fff",
-  borderWidth: 1,
-  borderColor: "#e5e7eb",
-  padding: 15,
-  borderRadius: 14,
-  alignItems: "center",
-  marginBottom: 12,
-  elevation: 1,
-},
-
-googleText: {
-  color: "#db4437",
-  fontWeight: "bold",
-},
-
-appleBtn: {
-  width: "100%",
-  backgroundColor: "#111827",
-  padding: 15,
-  borderRadius: 14,
-  alignItems: "center",
-  marginBottom: 20,
-  elevation: 2,
-},
-
-appleText: {
-  color: "#fff",
-  fontWeight: "bold",
-},
-
-register: {
-  textAlign: "center",
-  color: "#2563eb",
-  fontWeight: "600",
-  marginTop: 15,
-  fontSize: 15,
-},
-
+  container: {
+    flex: 1,
+    backgroundColor: '#f4f4f4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  avatar: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    marginBottom: 28,
+    backgroundColor: '#ddd',
+  },
+  forgotBtn: {
+    marginBottom: 14,
+  },
+  forgotText: {
+    color: '#888',
+    fontSize: 14,
+  },
+  registerLink: {
+    marginTop: 10,
+    color: '#666',
+    fontSize: 14,
+  },
+  registerLinkBold: {
+    color: '#3b5bdb',
+    fontWeight: '600',
+  },
+  statusText: {
+    color: '#888',
+    fontSize: 13,
+    marginBottom: 10,
+  },
+  errorText: {
+    color: '#e03131',
+    fontSize: 13,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
 });

@@ -3,12 +3,16 @@ import { TextInput, StyleSheet } from 'react-native';
 
 export default function CustomInput({
   placeholder,
-  secureTextEntry
+  secureTextEntry,
+  value,
+  onChangeText,
 }) {
   return (
     <TextInput
       placeholder={placeholder}
       secureTextEntry={secureTextEntry}
+      value={value}
+      onChangeText={onChangeText}
       style={styles.input}
     />
   );
